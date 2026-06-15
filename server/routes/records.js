@@ -1,6 +1,8 @@
 const router = require('express').Router();
 const pool = require('../config/db');
 
+const num = (v) => (v === null || v === undefined) ? 0 : Number(v);
+
 router.get('/', async (req, res) => {
   const { order_id, user_id, page = 1, pageSize = 20 } = req.query;
   let sql = `
@@ -32,10 +34,23 @@ router.get('/', async (req, res) => {
       ((conditions.length > 0) ? ' WHERE ' + conditions.join(' AND ') : ''),
       params.slice(0, -2)
     );
+    const data = rows.map(r => ({
+      id: num(r.id),
+      order_id: num(r.order_id),
+      user_id: num(r.user_id),
+      completed_qty: num(r.completed_qty),
+      defect_qty: num(r.defect_qty),
+      work_hours: num(r.work_hours),
+      defect_reason: r.defect_reason,
+      remark: r.remark,
+      created_at: r.created_at,
+      order_no: r.order_no,
+      user_name: r.user_name
+    }));
     res.json({
       success: true,
-      data: rows,
-      total: countResult[0].total,
+      data,
+      total: num(countResult[0].total),
       page: parseInt(page),
       pageSize: parseInt(pageSize)
     });

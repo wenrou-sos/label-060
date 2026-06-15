@@ -1,6 +1,8 @@
 const router = require('express').Router();
 const pool = require('../config/db');
 
+const num = (v) => (v === null || v === undefined) ? 0 : Number(v);
+
 function generateOrderNo() {
   const d = new Date();
   const y = d.getFullYear();
@@ -8,6 +10,25 @@ function generateOrderNo() {
   const day = String(d.getDate()).padStart(2, '0');
   const rand = String(Math.floor(Math.random() * 9000) + 1000);
   return `WO${y}${m}${day}${rand}`;
+}
+
+function calcRates(r) {
+  const plan_qty = num(r.plan_qty);
+  const completed_qty = num(r.completed_qty);
+  const defect_qty = num(r.defect_qty);
+  r.plan_qty = plan_qty;
+  r.completed_qty = completed_qty;
+  r.defect_qty = defect_qty;
+  r.total_work_hours = num(r.total_work_hours);
+  r.completion_rate = plan_qty > 0 ? +((completed_qty / plan_qty) * 100).toFixed(2) : 0;
+  const totalQty = completed_qty + defect_qty;
+  r.defect_rate = totalQty > 0 ? +((defect_qty / totalQty) * 100).toFixed(2) : 0;
+  r.id = num(r.id);
+  r.line_id = num(r.line_id);
+  r.product_id = num(r.product_id);
+  r.status = num(r.status);
+  r.assigned_by = num(r.assigned_by);
+  return r;
 }
 
 router.get('/', async (req, res) => {
@@ -38,11 +59,7 @@ router.get('/', async (req, res) => {
 
   try {
     const [rows] = await pool.query(sql, params);
-    rows.forEach(r => {
-      r.completion_rate = r.plan_qty > 0 ? +((r.completed_qty / r.plan_qty) * 100).toFixed(2) : 0;
-      const totalQty = r.completed_qty + r.defect_qty;
-      r.defect_rate = totalQty > 0 ? +((r.defect_qty / totalQty) * 100).toFixed(2) : 0;
-    });
+    rows.forEach(calcRates);
     res.json({ success: true, data: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -65,11 +82,8 @@ router.get('/:id', async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({ success: false, message: '工单不存在' });
     }
-    const r = rows[0];
-    r.completion_rate = r.plan_qty > 0 ? +((r.completed_qty / r.plan_qty) * 100).toFixed(2) : 0;
-    const totalQty = r.completed_qty + r.defect_qty;
-    r.defect_rate = totalQty > 0 ? +((r.defect_qty / totalQty) * 100).toFixed(2) : 0;
-    res.json({ success: true, data: r });
+    calcRates(rows[0]);
+    res.json({ success: true, data: rows[0] });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

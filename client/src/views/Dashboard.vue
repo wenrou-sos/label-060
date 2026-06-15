@@ -50,9 +50,9 @@
         <div class="stat-card-header">
           <div>
             <div class="stat-card-title">不良率</div>
-            <div class="stat-card-value" :style="{ color: overview.total_defect_rate > 3 ? '#dc2626' : '#059669' };">{{ overview.total_defect_rate }}%</div>
+            <div class="stat-card-value" :style="{ color: overview.total_defect_rate > 3 ? '#dc2626' : '#059669' }">{{ overview.total_defect_rate }}%</div>
           </div>
-          <div class="stat-card-icon" :style="{ background: overview.total_defect_rate > 3 ? '#fee2e2' : '#d1fae5', color: overview.total_defect_rate > 3 ? '#991b1b' : '#065f46' };">⚠️</div>
+          <div class="stat-card-icon" :style="{ background: overview.total_defect_rate > 3 ? '#fee2e2' : '#d1fae5', color: overview.total_defect_rate > 3 ? '#991b1b' : '#065f46' }">⚠️</div>
         </div>
         <div style="display: flex; justify-content: space-between; font-size: 13px; margin-top: 10px;">
           <span style="color: #6b7280;">不良数</span>
