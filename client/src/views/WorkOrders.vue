@@ -34,7 +34,8 @@
     </div>
 
     <div class="stat-card">
-      <el-table :data="filteredOrders" v-loading="loading" stripe :header-cell-style="{ background: '#f9fafb' }">
+      <el-table :data="filteredOrders" v-loading="loading" stripe :header-cell-style="{ background: '#f9fafb' }"
+        :row-style="rowStyle">
         <el-table-column prop="order_no" label="工单号" width="150" fixed />
         <el-table-column prop="line_name" label="产线" width="110" />
         <el-table-column label="产品" min-width="200">
@@ -58,10 +59,19 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="不良率" width="100" align="center">
+        <el-table-column label="不良率" width="110" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.defect_rate > 3" type="danger" size="small">{{ row.defect_rate }}%</el-tag>
+            <el-tag v-if="row.defect_alert" type="danger" effect="dark" size="small">{{ row.defect_rate }}%</el-tag>
+            <el-tag v-else-if="row.defect_rate > 3" type="danger" size="small">{{ row.defect_rate }}%</el-tag>
             <el-tag v-else type="success" size="small">{{ row.defect_rate }}%</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="阈值" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.defect_alert ? 'danger' : 'info'">{{ row.defect_threshold }}%</el-tag>
+            <el-tooltip v-if="row.defect_alert" content="当前不良率超过阈值" placement="top">
+              <span style="margin-left: 2px; color: #dc2626; font-weight: bold;">!</span>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column label="工时" width="90" align="center">
@@ -104,6 +114,12 @@
         </el-form-item>
         <el-form-item label="计划数量" prop="plan_qty">
           <el-input-number v-model="form.plan_qty" :min="1" :max="99999" style="width: 100%;" />
+        </el-form-item>
+        <el-form-item label="不良率阈值" prop="defect_threshold">
+          <el-input-number v-model="form.defect_threshold" :min="0.01" :max="100" :step="0.5" :precision="2" style="width: 100%;" />
+          <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+            当工单整体不良率超过该值(%)时触发告警，默认 5.00%
+          </div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="可选" />
@@ -151,7 +167,13 @@
             <el-tag type="primary" effect="plain">{{ orderDetail.completion_rate }}%</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="不良率">
-            <el-tag :type="orderDetail.defect_rate > 3 ? 'danger' : 'success'" effect="plain">{{ orderDetail.defect_rate }}%</el-tag>
+            <el-tag :type="orderDetail.defect_alert ? 'danger' : (orderDetail.defect_rate > 3 ? 'danger' : 'success')" effect="plain">{{ orderDetail.defect_rate }}%</el-tag>
+            <el-tooltip v-if="orderDetail.defect_alert" content="已超过阈值告警">
+              <span style="margin-left: 6px; color: #dc2626; font-weight: bold;">⚠</span>
+            </el-tooltip>
+          </el-descriptions-item>
+          <el-descriptions-item label="告警阈值">
+            <el-tag :type="orderDetail.defect_alert ? 'danger' : 'info'" effect="plain">{{ orderDetail.defect_threshold }}%</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="开始时间">{{ formatTime(orderDetail.start_time) }}</el-descriptions-item>
           <el-descriptions-item label="结束时间">{{ formatTime(orderDetail.end_time) }}</el-descriptions-item>
@@ -216,14 +238,20 @@ const newStatus = ref(0)
 const orderDetail = ref(null)
 const orderRecords = ref([])
 
-const form = reactive({ line_id: '', product_id: '', plan_qty: 100, remark: '' })
+const form = reactive({ line_id: '', product_id: '', plan_qty: 100, defect_threshold: 5.00, remark: '' })
 const rules = {
   line_id: [{ required: true, message: '请选择产线', trigger: 'change' }],
   product_id: [{ required: true, message: '请选择产品', trigger: 'change' }],
-  plan_qty: [{ required: true, message: '请输入计划数量', trigger: 'blur' }]
+  plan_qty: [{ required: true, message: '请输入计划数量', trigger: 'blur' }],
+  defect_threshold: [{ required: true, message: '请输入不良率阈值', trigger: 'blur' }]
 }
 
 const statusText = (s) => ['待生产', '生产中', '已完成', '已暂停'][s] || '未知'
+
+const rowStyle = ({ row }) => {
+  if (row.defect_alert) return { background: '#fef2f2' }
+  return {}
+}
 
 const formatTime = (t) => {
   if (!t) return '-'
@@ -259,7 +287,7 @@ const loadData = async () => {
 
 const handleCreate = () => {
   formMode.value = 'create'
-  Object.assign(form, { line_id: '', product_id: '', plan_qty: 100, remark: '' })
+  Object.assign(form, { line_id: '', product_id: '', plan_qty: 100, defect_threshold: 5.00, remark: '' })
   dialogVisible.value = true
 }
 
@@ -270,6 +298,7 @@ const handleEdit = (row) => {
     line_id: row.line_id,
     product_id: row.product_id,
     plan_qty: row.plan_qty,
+    defect_threshold: row.defect_threshold ?? 5.00,
     remark: row.remark || ''
   })
   dialogVisible.value = true
@@ -287,6 +316,7 @@ const submitForm = async () => {
         line_id: form.line_id,
         product_id: form.product_id,
         plan_qty: form.plan_qty,
+        defect_threshold: form.defect_threshold,
         remark: form.remark
       })
       ElMessage.success('更新成功')

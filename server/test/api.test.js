@@ -203,10 +203,81 @@ async function run() {
   });
   t13 ? pass++ : fail++;
 
+  let alertOrderId = null;
+  const t14 = await test('【告警】工单创建默认 defect_threshold=5.00，defect_alert=false', async () => {
+    const loginR = await request('POST', '/users/login', { username: 'admin', password: '123456' });
+    const r = await request('POST', '/workorders', {
+      line_id: 2, product_id: 2, plan_qty: 100, assigned_by: loginR.body.data.id, remark: '告警测试工单'
+    });
+    assert.ok(r.body.success);
+    alertOrderId = r.body.data.id;
+    const detail = await request('GET', `/workorders/${alertOrderId}`);
+    const d = detail.body.data;
+    assert.strictEqual(typeof d.defect_threshold, 'number', `defect_threshold 应为 number，实际 ${typeof d.defect_threshold} = ${d.defect_threshold}`);
+    assert.strictEqual(d.defect_threshold, 5.00, `默认阈值应为 5.00，实际 ${d.defect_threshold}`);
+    assert.strictEqual(d.defect_alert, false, `初始 defect_alert 应为 false`);
+  });
+  t14 ? pass++ : fail++;
+
+  const t15 = await test('【告警】上报不良率超阈值 => 返回 warning=true 和 defect_alert=true', async () => {
+    if (!alertOrderId) throw new Error('跳过：告警工单未创建');
+    const loginR = await request('POST', '/users/login', { username: 'worker02', password: '123456' });
+    const r = await request('POST', '/records', {
+      order_id: alertOrderId, user_id: loginR.body.data.id,
+      completed_qty: 80, defect_qty: 10, work_hours: 2
+    });
+    assert.ok(r.body.success, r.body.message);
+    assert.strictEqual(r.body.warning, true, `返回 warning 应为 true，实际 ${r.body.warning}`);
+    assert.strictEqual(typeof r.body.data.final_defect_rate, 'number', `final_defect_rate 应为 number`);
+    const expectedRate = +((10 / (80 + 10)) * 100).toFixed(2);
+    assert.strictEqual(r.body.data.final_defect_rate, expectedRate,
+      `final_defect_rate 应为 ${expectedRate}%，实际 ${r.body.data.final_defect_rate}`);
+    assert.strictEqual(r.body.data.defect_alert, true, `data.defect_alert 应为 true`);
+    assert.ok(/超过阈值/.test(r.body.message), `message 应包含"超过阈值"，实际 ${r.body.message}`);
+
+    const detail = await request('GET', `/workorders/${alertOrderId}`);
+    assert.strictEqual(detail.body.data.defect_alert, true, `工单详情 defect_alert 应为 true`);
+  });
+  t15 ? pass++ : fail++;
+
+  let lowThresholdOrderId = null;
+  const t16 = await test('【告警】创建工单自定义阈值 + PUT 更新阈值', async () => {
+    const loginR = await request('POST', '/users/login', { username: 'admin', password: '123456' });
+    const r = await request('POST', '/workorders', {
+      line_id: 3, product_id: 3, plan_qty: 200, defect_threshold: 2.5,
+      assigned_by: loginR.body.data.id, remark: '自定义阈值工单'
+    });
+    assert.ok(r.body.success);
+    lowThresholdOrderId = r.body.data.id;
+    let detail = await request('GET', `/workorders/${lowThresholdOrderId}`);
+    assert.strictEqual(detail.body.data.defect_threshold, 2.5,
+      `自定义阈值应为 2.5，实际 ${detail.body.data.defect_threshold}`);
+
+    const updateR = await request('PUT', `/workorders/${lowThresholdOrderId}`, { defect_threshold: 3.8 });
+    assert.ok(updateR.body.success);
+    detail = await request('GET', `/workorders/${lowThresholdOrderId}`);
+    assert.strictEqual(detail.body.data.defect_threshold, 3.8,
+      `更新阈值应为 3.8，实际 ${detail.body.data.defect_threshold}`);
+  });
+  t16 ? pass++ : fail++;
+
+  const t17 = await test('【告警】统计 /orders-rank 返回 defect_threshold + defect_alert 字段', async () => {
+    const r = await request('GET', '/stats/orders-rank?limit=10');
+    assert.ok(r.body.success);
+    assert.ok(r.body.data.length >= 1);
+    r.body.data.forEach(o => {
+      assert.strictEqual(typeof o.defect_threshold, 'number',
+        `工单 ${o.order_no} defect_threshold 应为 number，实际 ${typeof o.defect_threshold}`);
+      assert.strictEqual(typeof o.defect_alert, 'boolean',
+        `工单 ${o.order_no} defect_alert 应为 boolean，实际 ${typeof o.defect_alert}`);
+    });
+  });
+  t17 ? pass++ : fail++;
+
   await test('清理：删除测试工单', async () => {
-    if (newOrderId) {
-      await request('DELETE', `/workorders/${newOrderId}`);
-    }
+    if (newOrderId) await request('DELETE', `/workorders/${newOrderId}`);
+    if (alertOrderId) await request('DELETE', `/workorders/${alertOrderId}`);
+    if (lowThresholdOrderId) await request('DELETE', `/workorders/${lowThresholdOrderId}`);
     return true;
   });
 

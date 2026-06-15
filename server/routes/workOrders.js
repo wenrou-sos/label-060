@@ -16,13 +16,16 @@ function calcRates(r) {
   const plan_qty = num(r.plan_qty);
   const completed_qty = num(r.completed_qty);
   const defect_qty = num(r.defect_qty);
+  const defect_threshold = r.defect_threshold === null || r.defect_threshold === undefined ? 5 : num(r.defect_threshold);
   r.plan_qty = plan_qty;
   r.completed_qty = completed_qty;
   r.defect_qty = defect_qty;
   r.total_work_hours = num(r.total_work_hours);
+  r.defect_threshold = defect_threshold;
   r.completion_rate = plan_qty > 0 ? +((completed_qty / plan_qty) * 100).toFixed(2) : 0;
   const totalQty = completed_qty + defect_qty;
   r.defect_rate = totalQty > 0 ? +((defect_qty / totalQty) * 100).toFixed(2) : 0;
+  r.defect_alert = totalQty > 0 && r.defect_rate > defect_threshold;
   r.id = num(r.id);
   r.line_id = num(r.line_id);
   r.product_id = num(r.product_id);
@@ -90,14 +93,15 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { line_id, product_id, plan_qty, assigned_by, remark } = req.body;
+  const { line_id, product_id, plan_qty, assigned_by, remark, defect_threshold } = req.body;
   const order_no = generateOrderNo();
   try {
     const [result] = await pool.query(
       `INSERT INTO work_orders 
-       (order_no, line_id, product_id, plan_qty, assigned_by, remark) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [order_no, line_id, product_id, plan_qty, assigned_by, remark || null]
+       (order_no, line_id, product_id, plan_qty, assigned_by, remark, defect_threshold) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [order_no, line_id, product_id, plan_qty, assigned_by, remark || null,
+       defect_threshold !== undefined && defect_threshold !== null ? num(defect_threshold) : 5.00]
     );
     res.json({ success: true, data: { id: result.insertId, order_no }, message: '工单创建成功' });
   } catch (err) {
@@ -107,7 +111,7 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const { status, line_id, product_id, plan_qty, remark } = req.body;
+  const { status, line_id, product_id, plan_qty, remark, defect_threshold } = req.body;
 
   try {
     const conn = await pool.getConnection();
@@ -118,6 +122,9 @@ router.put('/:id', async (req, res) => {
     if (product_id !== undefined) { fields.push('product_id = ?'); params.push(product_id); }
     if (plan_qty !== undefined) { fields.push('plan_qty = ?'); params.push(plan_qty); }
     if (remark !== undefined) { fields.push('remark = ?'); params.push(remark); }
+    if (defect_threshold !== undefined && defect_threshold !== null) {
+      fields.push('defect_threshold = ?'); params.push(num(defect_threshold));
+    }
     if (status !== undefined) {
       fields.push('status = ?');
       params.push(status);

@@ -52,6 +52,7 @@ CREATE TABLE work_orders (
   completed_qty INT DEFAULT 0 COMMENT '已完成数量',
   defect_qty INT DEFAULT 0 COMMENT '不良数量',
   total_work_hours DECIMAL(10,2) DEFAULT 0 COMMENT '累计工时(小时)',
+  defect_threshold DECIMAL(5,2) DEFAULT 5.00 COMMENT '不良率告警阈值(%)，默认5%',
   status TINYINT DEFAULT 0 COMMENT '0:待生产 1:生产中 2:已完成 3:已暂停',
   assigned_by INT NOT NULL COMMENT '指派人工号',
   start_time DATETIME DEFAULT NULL COMMENT '实际开始时间',
@@ -107,12 +108,12 @@ INSERT INTO users (username, password, real_name, role, line_id, status) VALUES
 ('worker05', '123456', '孙操作', 2, 5, 1);
 
 -- 插入测试数据：工单
-INSERT INTO work_orders (order_no, line_id, product_id, plan_qty, completed_qty, defect_qty, total_work_hours, status, assigned_by, start_time, end_time, remark) VALUES
-('WO20260614001', 1, 1, 500, 320, 12, 16.5, 1, 1, '2026-06-14 08:00:00', NULL, '首批次生产'),
-('WO20260614002', 2, 2, 1000, 680, 25, 14.0, 1, 1, '2026-06-14 08:00:00', NULL, '加急订单'),
-('WO20260614003', 3, 4, 2000, 2000, 18, 22.5, 2, 1, '2026-06-13 08:00:00', '2026-06-14 12:00:00', '已完成'),
-('WO20260614004', 4, 3, 300, 0, 0, 0, 0, 2, NULL, NULL, '待投产'),
-('WO20260614005', 5, 5, 5000, 1200, 45, 8.0, 1, 2, '2026-06-14 08:30:00', NULL, '常规生产');
+INSERT INTO work_orders (order_no, line_id, product_id, plan_qty, completed_qty, defect_qty, total_work_hours, defect_threshold, status, assigned_by, start_time, end_time, remark) VALUES
+('WO20260614001', 1, 1, 500, 320, 12, 16.5, 5.00, 1, 1, '2026-06-14 08:00:00', NULL, '首批次生产'),
+('WO20260614002', 2, 2, 1000, 680, 25, 14.0, 5.00, 1, 1, '2026-06-14 08:00:00', NULL, '加急订单'),
+('WO20260614003', 3, 4, 2000, 2000, 18, 22.5, 5.00, 2, 1, '2026-06-13 08:00:00', '2026-06-14 12:00:00', '已完成'),
+('WO20260614004', 4, 3, 300, 0, 0, 0, 5.00, 0, 2, NULL, NULL, '待投产'),
+('WO20260614005', 5, 5, 5000, 1200, 45, 8.0, 5.00, 1, 2, '2026-06-14 08:30:00', NULL, '常规生产');
 
 -- 插入测试数据：生产记录
 INSERT INTO production_records (order_id, user_id, completed_qty, defect_qty, work_hours, defect_reason, remark) VALUES

@@ -87,7 +87,7 @@ router.get('/orders-rank', async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT
-        w.id, w.order_no, w.plan_qty, w.completed_qty, w.defect_qty, w.status,
+        w.id, w.order_no, w.plan_qty, w.completed_qty, w.defect_qty, w.status, w.defect_threshold,
         l.line_name,
         p.product_name, p.product_model
       FROM work_orders w
@@ -100,6 +100,7 @@ router.get('/orders-rank', async (req, res) => {
       const plan_qty = num(r.plan_qty);
       const completed_qty = num(r.completed_qty);
       const defect_qty = num(r.defect_qty);
+      const defect_threshold = r.defect_threshold === null || r.defect_threshold === undefined ? 5 : num(r.defect_threshold);
       const completion_rate = plan_qty > 0 ? +((completed_qty / plan_qty) * 100).toFixed(2) : 0;
       const total = completed_qty + defect_qty;
       const defect_rate = total > 0 ? +((defect_qty / total) * 100).toFixed(2) : 0;
@@ -110,7 +111,8 @@ router.get('/orders-rank', async (req, res) => {
         product_name: r.product_name,
         product_model: r.product_model,
         plan_qty, completed_qty, defect_qty,
-        completion_rate, defect_rate,
+        completion_rate, defect_rate, defect_threshold,
+        defect_alert: total > 0 && defect_rate > defect_threshold,
         status: num(r.status)
       };
     });

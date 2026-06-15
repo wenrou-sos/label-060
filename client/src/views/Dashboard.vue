@@ -97,7 +97,8 @@
         <div class="page-header" style="margin-bottom: 16px;">
           <h3 style="font-size: 16px; font-weight: 600;">🏆 工单完成率排行</h3>
         </div>
-        <el-table :data="ordersRank" size="small" :header-cell-style="{ background: '#f9fafb' }">
+        <el-table :data="ordersRank" size="small" :header-cell-style="{ background: '#f9fafb' }"
+          :row-style="rankRowStyle">
           <el-table-column type="index" label="#" width="50" align="center" />
           <el-table-column prop="order_no" label="工单" width="140" />
           <el-table-column prop="line_name" label="产线" width="100" />
@@ -109,9 +110,14 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="不良率" width="90" align="center">
+          <el-table-column label="不良率" width="120" align="center">
             <template #default="{ row }">
-              <el-tag :type="row.defect_rate > 3 ? 'danger' : 'success'" size="small">{{ row.defect_rate }}%</el-tag>
+              <el-tag :type="row.defect_alert ? 'danger' : (row.defect_rate > 3 ? 'danger' : 'success')" size="small">
+                {{ row.defect_rate }}%
+              </el-tag>
+              <el-tooltip v-if="row.defect_alert" :content="'阈值 ' + row.defect_threshold + '%，已超阈值'" placement="top">
+                <span style="margin-left: 3px; color: #dc2626; font-weight: bold;">⚠</span>
+              </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column label="状态" width="80" align="center">
@@ -177,6 +183,11 @@ const recentRecords = ref([])
 let timer = null
 
 const statusText = (s) => ['待生产', '生产中', '已完成', '已暂停'][s] || '未知'
+
+const rankRowStyle = ({ row }) => {
+  if (row.defect_alert) return { background: '#fef2f2' }
+  return {}
+}
 
 const getBarColor = (rate) => {
   if (rate >= 80) return '#10b981'

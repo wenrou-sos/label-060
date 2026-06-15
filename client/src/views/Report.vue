@@ -54,8 +54,15 @@
             <span>开始时间: {{ formatTime(order.start_time) }}</span>
             <span>累计工时: {{ order.total_work_hours }}h</span>
           </div>
-          <div v-if="order.remark" style="font-size: 12px; color: #92400e; margin-top: 4px;">
+        <div v-if="order.remark" style="font-size: 12px; color: #92400e; margin-top: 4px;">
             备注: {{ order.remark }}</div>
+          <div style="margin-top: 8px; font-size: 12px;">
+            <span style="color: #6b7280;">告警阈值: </span>
+            <el-tag size="small" :type="order.defect_alert ? 'danger' : 'info'">{{ order.defect_threshold }}%</el-tag>
+            <el-tag v-if="order.defect_alert" size="small" type="danger" style="margin-left: 6px;">
+              ⚠ 已超阈值
+            </el-tag>
+          </div>
         </div>
       </div>
     </div>
@@ -72,6 +79,7 @@
         <div style="font-size: 13px; margin-top: 4px; color: #6b7280;">
           已完成 <strong style="color: #1e40af;">{{ selectedOrder.completed_qty }}</strong> / {{ selectedOrder.plan_qty }} {{ selectedOrder.unit }}
           <span style="margin-left: 12px;">不良 <strong style="color: #dc2626;">{{ selectedOrder.defect_qty }}</strong></span>
+          <span style="margin-left: 12px;">阈值 <el-tag size="small" type="info">{{ selectedOrder.defect_threshold }}%</el-tag></span>
         </div>
       </div>
       <el-form :model="reportForm" :rules="reportRules" ref="reportFormRef" label-width="100px">
@@ -83,6 +91,16 @@
         </el-form-item>
         <el-form-item label="本次不良" prop="defect_qty">
           <el-input-number v-model="reportForm.defect_qty" :min="0" :max="9999" style="width: 100%;" />
+          <div v-if="previewOverThreshold" style="margin-top: 6px;">
+            <el-alert
+              :title="`上报后整体不良率将达 ${previewDefectRate}%，超过阈值 ${selectedOrder.defect_threshold}%！`"
+              type="warning"
+              :closable="false"
+              show-icon />
+          </div>
+          <div v-else style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+            上报后预计整体不良率: <strong>{{ previewDefectRate }}%</strong>
+          </div>
         </el-form-item>
         <el-form-item label="工作工时" prop="work_hours">
           <el-input-number v-model="reportForm.work_hours" :min="0" :max="24" :step="0.5" :precision="1" style="width: 100%;" />
@@ -104,7 +122,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { getWorkOrders, submitRecord } from '@/api/modules'
 
@@ -140,6 +158,20 @@ const formatTime = (t) => {
   const pad = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
+
+const previewDefectRate = computed(() => {
+  if (!selectedOrder.value) return '0.00'
+  const finalDefect = (selectedOrder.value.defect_qty || 0) + Number(reportForm.defect_qty)
+  const finalCompleted = (selectedOrder.value.completed_qty || 0) + Number(reportForm.completed_qty)
+  const total = finalDefect + finalCompleted
+  if (total === 0) return '0.00'
+  return ((finalDefect / total) * 100).toFixed(2)
+})
+
+const previewOverThreshold = computed(() => {
+  if (!selectedOrder.value) return false
+  return +previewDefectRate.value > (selectedOrder.value.defect_threshold || 5)
+})
 
 const activeOrders = computed(() => orders.value.filter(o => o.status === 0 || o.status === 1))
 
@@ -179,9 +211,15 @@ const submitReport = async () => {
       '数量超限提示', { type: 'warning' }
     )
   }
+  if (previewOverThreshold.value) {
+    await ElMessageBox.confirm(
+      `上报后整体不良率将达到 ${previewDefectRate}%，已超过阈值 ${selectedOrder.value.defect_threshold}%，是否确认上报？`,
+      '⚠ 不良率告警', { type: 'error', confirmButtonText: '确认上报', cancelButtonText: '返回修改' }
+    )
+  }
   submitting.value = true
   try {
-    await submitRecord({
+    const res = await submitRecord({
       order_id: selectedOrder.value.id,
       user_id: user.id,
       completed_qty: reportForm.completed_qty,
@@ -190,7 +228,17 @@ const submitReport = async () => {
       defect_reason: reportForm.defect_reason || '',
       remark: reportForm.remark || ''
     })
-    ElMessage.success('上报成功')
+    if (res.warning || res.data?.defect_alert) {
+      ElNotification({
+        title: '⚠ 不良率告警',
+        message: res.message || `当前工单不良率 ${res.data?.final_defect_rate}% 已超过阈值 ${res.data?.defect_threshold}%，请及时处理！`,
+        type: 'error',
+        duration: 6000,
+        showClose: true
+      })
+    } else {
+      ElMessage.success(res.message || '上报成功')
+    }
     reportVisible.value = false
     loadData()
   } finally {
